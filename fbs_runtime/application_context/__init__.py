@@ -80,21 +80,6 @@ class _ApplicationContext:
         """
         return [StderrExceptionHandler()]
     @cached_property
-    def licensing(self):
-        """
-        This field helps you implement a license key functionality for your
-        application. For more information, see:
-            https://build-system.fman.io/manual#license-keys
-        """
-
-        # fbs's licensing implementation incurs a dependency on Python library
-        # `rsa`. We don't want to force all users to install this library.
-        # So we import fbs_runtime.licensing here, instead of at the top of this
-        # file. This lets people who don't use licensing avoid the dependency.
-        from fbs_runtime.licensing import _Licensing
-
-        return _Licensing(self.build_settings['licensing_pubkey'])
-    @cached_property
     def app_icon(self):
         """
         The app icon. Not available on Mac because app icons are handled by the

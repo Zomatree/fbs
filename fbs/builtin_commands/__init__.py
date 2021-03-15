@@ -8,7 +8,6 @@ from fbs.builtin_commands._util import prompt_for_value, \
     require_existing_project, update_json, require_frozen_app, require_installer
 from fbs.cmdline import command
 from fbs.resources import copy_with_filtering
-from fbs.upload import _upload_repo
 from fbs_runtime import FbsError
 from fbs_runtime.platform import is_windows, is_mac, is_linux, is_arch_linux, \
     is_ubuntu, is_fedora
@@ -314,92 +313,6 @@ def repo():
         )
     else:
         raise FbsError('This command is not supported on this platform.')
-
-@command
-def upload():
-    """
-    Upload installer and repository to fbs.sh
-    """
-    require_existing_project()
-    try:
-        username = SETTINGS['fbs_user']
-        password = SETTINGS['fbs_pass']
-    except KeyError as e:
-        raise FbsError(
-            'Could not find setting "%s". You may want to invoke one of the '
-            'following:\n'
-            ' * fbs register\n'
-            ' * fbs login'
-            % (e.args[0],)
-        ) from None
-    _upload_repo(username, password)
-    app_name = SETTINGS['app_name']
-    url = lambda p: 'https://fbs.sh/%s/%s/%s' % (username, app_name, p)
-    message = 'Done! '
-    pkg_name = app_name.lower()
-    installer_url = url(SETTINGS['installer'])
-    if is_linux():
-        message += 'Your users can now install your app via the following ' \
-                   'commands:\n'
-        format_commands = lambda *cmds: '\n'.join('    ' + c for c in cmds)
-        repo_url = url(SETTINGS['repo_subdir'])
-        if is_ubuntu():
-            message += format_commands(
-                "sudo apt-get install apt-transport-https",
-                "wget -qO - %s | sudo apt-key add -" % url('public-key.gpg'),
-                "echo 'deb [arch=amd64] %s stable main' | " % repo_url +
-                "sudo tee /etc/apt/sources.list.d/%s.list" % pkg_name,
-                "sudo apt-get update",
-                "sudo apt-get install " + pkg_name
-            )
-            message += '\nIf they already have your app installed, they can ' \
-                       'force an immediate update via:\n'
-            message += format_commands(
-                'sudo apt-get update '
-                '-o Dir::Etc::sourcelist="/etc/apt/sources.list.d/%s.list" '
-                '-o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"'
-                % pkg_name,
-                'sudo apt-get install --only-upgrade ' + pkg_name
-            )
-        elif is_arch_linux():
-            message += format_commands(
-                "curl -O %s && " % url('public-key.gpg') +
-                "sudo pacman-key --add public-key.gpg && " +
-                "sudo pacman-key --lsign-key %s && " % SETTINGS['gpg_key'] +
-                "rm public-key.gpg",
-                "echo -e '\\n[%s]\\nServer = %s' | sudo tee -a /etc/pacman.conf"
-                % (app_name, repo_url),
-                "sudo pacman -Syu " + pkg_name
-            )
-            message += '\nIf they already have your app installed, they can ' \
-                       'force an immediate update via:\n'
-            message += format_commands('sudo pacman -Syu --needed ' + pkg_name)
-        elif is_fedora():
-            message += format_commands(
-                "sudo rpm -v --import " + url('public-key.gpg'),
-                "sudo dnf config-manager --add-repo %s/%s.repo"
-                % (repo_url, app_name),
-                "sudo dnf install " + pkg_name
-            )
-            message += "\n(On CentOS, replace 'dnf' by 'yum' and " \
-                       "'dnf config-manager' by 'yum-config-manager'.)"
-            message += '\nIf they already have your app installed, they can ' \
-                       'force an immediate update via:\n'
-            message += \
-                format_commands('sudo dnf upgrade %s --refresh' % pkg_name)
-            message += '\nThis is for Fedora. For CentOS, use:\n'
-            message += format_commands(
-                'sudo yum clean all && sudo yum upgrade ' + pkg_name
-            )
-        else:
-            raise FbsError('This Linux distribution is not supported.')
-        message += '\nFinally, your users can also install without automatic ' \
-                   'updates by downloading:\n    ' + installer_url
-        extra = {'wrap': False}
-    else:
-        message += 'Your users can now download and install %s.' % installer_url
-        extra = None
-    _LOG.info(message, extra=extra)
 
 @command
 def release(version=None):
